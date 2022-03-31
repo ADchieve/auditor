@@ -1,5 +1,5 @@
 {
-  "name": "damienharper/auditor",
+  "name": "adchieve/auditor",
   "type": "library",
   "description": "The missing audit log library.",
   "keywords": ["doctrine", "audit", "audit-log", "audit-trail"],
@@ -55,6 +55,6 @@
     }
   },
   "replace": {
-    "damienharper/auditor": "^2.0.1"
+    "damienharper/auditor": "2.0.1"
   }
 }
