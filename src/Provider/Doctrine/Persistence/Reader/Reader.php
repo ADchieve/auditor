@@ -84,6 +84,12 @@ class Reader
             $query->addFilter(new SimpleFilter(Query::DISCRIMINATOR, $entity));
         }
 
+        foreach ($this->provider->getConfiguration()->getExtraIndices() as $indexedField => $extraIndexConfig) {
+            if (null !== $config[$indexedField]) {
+                $query->addFilter(new SimpleFilter($indexedField, $config[$indexedField]));
+            }
+        }
+
         return $query;
     }
 
@@ -108,6 +114,11 @@ class Reader
             ->setAllowedValues('page', static fn ($value) => null === $value || $value >= 1)
             ->setAllowedValues('page_size', static fn ($value) => null === $value || $value >= 1)
         ;
+
+        foreach ($this->provider->getConfiguration()->getExtraIndices() as $indexedField => $extraIndexConfig) {
+            $resolver->setDefault($indexedField, null);
+            $resolver->setAllowedTypes($indexedField, ['null', 'int', 'string', 'array']);
+        }
     }
 
     /**

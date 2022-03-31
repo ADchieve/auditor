@@ -22,6 +22,10 @@ class Configuration implements ConfigurationInterface
 
     private string $tableSuffix;
 
+    private array $extraFields;
+
+    private array $extraIndices;
+
     private array $ignoredColumns;
 
     private ?array $entities = null;
@@ -58,6 +62,20 @@ class Configuration implements ConfigurationInterface
             }
         }
 
+        if (isset($config['extra_fields']) && !empty($config['extra_fields'])) {
+            // use field names as array keys for easier lookup
+            foreach ($config['extra_fields'] as $fieldName => $fieldOptions) {
+                $this->extraFields[$fieldName] = $fieldOptions;
+            }
+        }
+
+        if (isset($config['extra_indices']) && !empty($config['extra_indices'])) {
+            // use index names as array keys for easier lookup
+            foreach ($config['extra_indices'] as $indexName => $indexOptions) {
+                $this->extraIndices[$indexName] = $indexOptions;
+            }
+        }
+
         $this->storageServices = $config['storage_services'];
         $this->auditingServices = $config['auditing_services'];
         $this->isViewerEnabled = $config['viewer'];
@@ -73,6 +91,8 @@ class Configuration implements ConfigurationInterface
                 'table_suffix' => '_audit',
                 'ignored_columns' => [],
                 'entities' => [],
+                'extra_fields' => [],
+                'extra_indices' => [],
                 'storage_services' => [],
                 'auditing_services' => [],
                 'viewer' => true,
@@ -82,6 +102,8 @@ class Configuration implements ConfigurationInterface
             ->setAllowedTypes('table_suffix', 'string')
             ->setAllowedTypes('ignored_columns', 'array')
             ->setAllowedTypes('entities', 'array')
+            ->setAllowedTypes('extra_fields', 'array')
+            ->setAllowedTypes('extra_indices', 'array')
             ->setAllowedTypes('storage_services', 'array')
             ->setAllowedTypes('auditing_services', 'array')
             ->setAllowedTypes('viewer', 'bool')
@@ -161,6 +183,53 @@ class Configuration implements ConfigurationInterface
     public function getIgnoredColumns(): array
     {
         return $this->ignoredColumns;
+    }
+
+    public function getExtraFields(): array
+    {
+        return $this->extraFields;
+    }
+
+    /**
+     * @param array<string, mixed> $extraFields
+     *
+     * @return $this
+     */
+    public function setExtraFields(array $extraFields): self
+    {
+        $this->extraFields = $extraFields;
+
+        return $this;
+    }
+
+    public function getExtraIndices(): array
+    {
+        return $this->extraIndices;
+    }
+
+    public function prepareExtraIndices(string $tablename): array
+    {
+        $indices = [];
+        foreach ($this->extraIndices as $extraIndexField => $extraIndexOptions) {
+            $indices[$extraIndexField] = [
+                'type' => $extraIndexOptions['type'] ?? 'index',
+                'name' => sprintf('%s_%s_idx', $extraIndexOptions['name_prefix'] ?? $extraIndexField, md5($tablename)),
+            ];
+        }
+
+        return $indices;
+    }
+
+    /**
+     * @param array<string, mixed> $extraIndices
+     *
+     * @return $this
+     */
+    public function setExtraIndices(array $extraIndices): self
+    {
+        $this->extraIndices = $extraIndices;
+
+        return $this;
     }
 
     /**
