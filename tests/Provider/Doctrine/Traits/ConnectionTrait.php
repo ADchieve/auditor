@@ -1,9 +1,8 @@
 <?php
 
-declare(strict_types=1);
-
 namespace DH\Auditor\Tests\Provider\Doctrine\Traits;
 
+use DH\Auditor\Provider\Doctrine\Configuration;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\DriverManager;
 
@@ -12,7 +11,7 @@ trait ConnectionTrait
     /**
      * @var Connection[]
      */
-    private static array $connections = [];
+    private static $connections = [];
 
     private function getConnection(string $name = 'default', ?array $params = null): Connection
     {
@@ -20,10 +19,10 @@ trait ConnectionTrait
             self::$connections[$name] = $this->createConnection($params);
         }
 
-//        if (false === self::$connections[$name]->ping()) {
-//            self::$connections[$name]->close();
-//            self::$connections[$name]->connect();
-//        }
+        //        if (false === self::$connections[$name]->ping()) {
+        //            self::$connections[$name]->close();
+        //            self::$connections[$name]->connect();
+        //        }
 
         return self::$connections[$name];
     }
@@ -35,7 +34,7 @@ trait ConnectionTrait
         if ('pdo_sqlite' === $params['driver']) {
             // SQLite
             $connection = DriverManager::getConnection($params);
-            $schema = $connection->createSchemaManager()->createSchema();
+            $schema = $connection->getSchemaManager()->createSchema();
             $stmts = $schema->toDropSql($connection->getDatabasePlatform());
             foreach ($stmts as $stmt) {
                 $connection->executeStatement($stmt);
@@ -53,7 +52,7 @@ trait ConnectionTrait
                 'SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '.$connection->getDatabasePlatform()->quoteStringLiteral($dbname)
             );
 
-            $connection->createSchemaManager()->dropAndCreateDatabase($dbname);
+            $connection->getSchemaManager()->dropAndCreateDatabase($dbname);
         } else {
             // Other
             $tmpParams = $params;
@@ -63,9 +62,9 @@ trait ConnectionTrait
             $connection = DriverManager::getConnection($tmpParams);
 
             if ($connection->getDatabasePlatform()->supportsCreateDropDatabase()) {
-                $connection->createSchemaManager()->dropAndCreateDatabase($dbname);
+                $connection->getSchemaManager()->dropAndCreateDatabase($dbname);
             } else {
-                $schema = $connection->createSchemaManager()->createSchema();
+                $schema = $connection->getSchemaManager()->createSchema();
                 $stmts = $schema->toDropSql($connection->getDatabasePlatform());
                 foreach ($stmts as $stmt) {
                     $connection->executeStatement($stmt);
@@ -81,13 +80,13 @@ trait ConnectionTrait
     private static function getConnectionParameters(?array $params = null): array
     {
         if (null === $params && !isset(
-            $GLOBALS['db_type'],
-            $GLOBALS['db_username'],
-            $GLOBALS['db_password'],
-            $GLOBALS['db_host'],
-            $GLOBALS['db_name'],
-            $GLOBALS['db_port']
-        )) {
+                $GLOBALS['db_type'],
+                $GLOBALS['db_username'],
+                $GLOBALS['db_password'],
+                $GLOBALS['db_host'],
+                $GLOBALS['db_name'],
+                $GLOBALS['db_port']
+            )) {
             // in memory SQLite DB
             return [
                 'driver' => 'pdo_sqlite',

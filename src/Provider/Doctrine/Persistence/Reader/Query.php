@@ -1,11 +1,11 @@
 <?php
 
-declare(strict_types=1);
-
 namespace DH\Auditor\Provider\Doctrine\Persistence\Reader;
 
 use DH\Auditor\Exception\InvalidArgumentException;
 use DH\Auditor\Model\Entry;
+use DH\Auditor\Provider\ConfigurationInterface;
+use DH\Auditor\Provider\Doctrine\Configuration;
 use DH\Auditor\Provider\Doctrine\Persistence\Helper\SchemaHelper;
 use DH\Auditor\Provider\Doctrine\Persistence\Reader\Filter\DateRangeFilter;
 use DH\Auditor\Provider\Doctrine\Persistence\Reader\Filter\FilterInterface;
@@ -16,9 +16,6 @@ use Doctrine\DBAL\Query\QueryBuilder;
 use Doctrine\DBAL\Result;
 use Exception;
 
-/**
- * @see \DH\Auditor\Tests\Provider\Doctrine\Persistence\Reader\QueryTest
- */
 class Query
 {
     public const TYPE = 'type';
@@ -29,22 +26,47 @@ class Query
     public const ID = 'id';
     public const DISCRIMINATOR = 'discriminator';
 
-    private array $filters = [];
+    /**
+     * @var array
+     */
+    private $filters = [];
 
-    private array $orderBy = [];
+    /**
+     * @var array
+     */
+    private $orderBy = [];
 
-    private Connection $connection;
+    /**
+     * @var Connection
+     */
+    private $connection;
 
-    private string $table;
+    /**
+     * @var string
+     */
+    private $table;
 
-    private int $offset = 0;
+    /**
+     * @var Configuration
+     */
+    private $configuration;
 
-    private int $limit = 0;
+    /**
+     * @var int
+     */
+    private $offset = 0;
 
-    public function __construct(string $table, Connection $connection)
+    /**
+     * @var int
+     */
+    private $limit = 0;
+
+    public function __construct(string $table, Connection $connection, ConfigurationInterface $configuration)
     {
         $this->connection = $connection;
         $this->table = $table;
+        \assert($configuration instanceof Configuration);
+        $this->configuration = $configuration;
 
         foreach ($this->getSupportedFilters() as $filterType) {
             $this->filters[$filterType] = [];
@@ -92,7 +114,7 @@ class Query
                 ;
             } else {
                 // doctrine/dbal v2.13.x
-                $result = $queryBuilder // @phpstan-ignore-line
+                $result = $queryBuilder
                     ->execute()
                     ->fetchColumn(0)
                 ;
@@ -101,7 +123,7 @@ class Query
             $result = false;
         }
 
-        return false === $result ? 0 : (int) $result;
+        return false === $result ? 0 : $result;
     }
 
     public function addFilter(FilterInterface $filter): self
@@ -149,7 +171,7 @@ class Query
 
     public function getSupportedFilters(): array
     {
-        return array_keys(SchemaHelper::getAuditTableIndices('fake'));
+        return array_keys($this->configuration->getAllIndices('fake'));
     }
 
     public function getFilters(): array
@@ -223,7 +245,7 @@ class Query
     private function buildWhere(QueryBuilder $queryBuilder): QueryBuilder
     {
         foreach ($this->filters as $name => $rawFilters) {
-            if (0 === (is_countable($rawFilters) ? \count($rawFilters) : 0)) {
+            if (0 === \count($rawFilters)) {
                 continue;
             }
 
@@ -236,7 +258,6 @@ class Query
                         $filters = [$this->mergeSimpleFilters($filters)];
 
                         break;
-
                     case RangeFilter::class:
                     case DateRangeFilter::class:
                         break;

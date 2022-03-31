@@ -1,7 +1,5 @@
 <?php
 
-declare(strict_types=1);
-
 namespace DH\Auditor\Provider\Doctrine;
 
 use DH\Auditor\Event\LifecycleEvent;
@@ -22,12 +20,12 @@ use DH\Auditor\Provider\Service\StorageServiceInterface;
 use Doctrine\ORM\EntityManagerInterface;
 use Exception;
 
-/**
- * @see \DH\Auditor\Tests\Provider\Doctrine\DoctrineProviderTest
- */
 class DoctrineProvider extends AbstractProvider
 {
-    private TransactionManager $transactionManager;
+    /**
+     * @var TransactionManager
+     */
+    private $transactionManager;
 
     public function __construct(ConfigurationInterface $configuration)
     {
@@ -87,8 +85,6 @@ class DoctrineProvider extends AbstractProvider
             return array_values($this->getStorageServices())[0];
         }
 
-        \assert(\is_callable($storageMapper));   // helps PHPStan
-
         return $storageMapper($entity, $this->getStorageServices());
     }
 
@@ -99,19 +95,8 @@ class DoctrineProvider extends AbstractProvider
         $entity = $payload['entity'];
         unset($payload['table'], $payload['entity']);
 
-        $fields = [
-            'type' => ':type',
-            'object_id' => ':object_id',
-            'discriminator' => ':discriminator',
-            'transaction_hash' => ':transaction_hash',
-            'diffs' => ':diffs',
-            'blame_id' => ':blame_id',
-            'blame_user' => ':blame_user',
-            'blame_user_fqdn' => ':blame_user_fqdn',
-            'blame_user_firewall' => ':blame_user_firewall',
-            'ip' => ':ip',
-            'created_at' => ':created_at',
-        ];
+        $fields = array_combine(array_keys($payload), array_map(function ($x) {return ":{$x}"; }, array_keys($payload)));
+        \assert(\is_array($fields));    // helps PHPStan
 
         $query = sprintf(
             'INSERT INTO %s (%s) VALUES (%s)',
@@ -129,11 +114,6 @@ class DoctrineProvider extends AbstractProvider
         }
 
         $statement->execute();
-
-        // let's get the last inserted ID from the database so other providers can use that info
-        $payload = $event->getPayload();
-        $payload['id'] = (int) $storageService->getEntityManager()->getConnection()->lastInsertId();
-        $event->setPayload($payload);
     }
 
     /**
@@ -146,11 +126,12 @@ class DoctrineProvider extends AbstractProvider
         $class = DoctrineHelper::getRealClassName($entity);
         // is $entity part of audited entities?
         \assert($this->configuration instanceof Configuration);   // helps PHPStan
-
-        return !(!\array_key_exists($class, $this->configuration->getEntities()))
+        if (!\array_key_exists($class, $this->configuration->getEntities())) {
             // no => $entity is not audited
+            return false;
+        }
 
-         ;
+        return true;
     }
 
     /**
@@ -160,7 +141,6 @@ class DoctrineProvider extends AbstractProvider
      */
     public function isAudited($entity): bool
     {
-        \assert(null !== $this->auditor);
         if (!$this->auditor->getConfiguration()->isEnabled()) {
             return false;
         }
@@ -218,11 +198,13 @@ class DoctrineProvider extends AbstractProvider
         }
 
         // are columns excluded and is field part of them?
-        return !(isset($entityOptions['ignored_columns'])
-            && \in_array($field, $entityOptions['ignored_columns'], true))
+        if (isset($entityOptions['ignored_columns'])
+            && \in_array($field, $entityOptions['ignored_columns'], true)) {
             // yes => $field is not audited
+            return false;
+        }
 
-         ;
+        return true;
     }
 
     public function supportsStorage(): bool
@@ -246,7 +228,7 @@ class DoctrineProvider extends AbstractProvider
         \assert($this->configuration instanceof Configuration);   // helps PHPStan
         $annotationLoader = new AnnotationLoader($entityManager);
         $this->configuration->setEntities(array_merge(
-            $entities ?? $this->configuration->getEntities(),
+            null === $entities ? $this->configuration->getEntities() : $entities,
             $annotationLoader->load()
         ));
 
@@ -260,10 +242,10 @@ class DoctrineProvider extends AbstractProvider
             throw new ProviderException('You must provide a mapper function to map audits to storage.');
         }
 
-//        if (null === $this->getStorageMapper() && 1 === count($this->getStorageServices())) {
-//            // No mapper and only 1 storage entity manager
-//            return array_values($this->storageServices)[0];
-//        }
+        //        if (null === $this->getStorageMapper() && 1 === count($this->getStorageServices())) {
+        //            // No mapper and only 1 storage entity manager
+        //            return array_values($this->storageServices)[0];
+        //        }
 
         return $this;
     }

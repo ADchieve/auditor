@@ -1,7 +1,5 @@
 <?php
 
-declare(strict_types=1);
-
 namespace DH\Auditor\Provider\Doctrine\Persistence\Reader;
 
 use ArrayIterator;
@@ -16,14 +14,14 @@ use DH\Auditor\Provider\Doctrine\Service\StorageService;
 use Doctrine\ORM\Mapping\ClassMetadata as ORMMetadata;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
-/**
- * @see \DH\Auditor\Tests\Provider\Doctrine\Persistence\Reader\ReaderTest
- */
 class Reader
 {
     public const PAGE_SIZE = 50;
 
-    private DoctrineProvider $provider;
+    /**
+     * @var DoctrineProvider
+     */
+    private $provider;
 
     /**
      * Reader constructor.
@@ -50,7 +48,11 @@ class Reader
         /** @var StorageService $storageService */
         $storageService = $this->provider->getStorageServiceForEntity($entity);
 
-        $query = new Query($this->getEntityAuditTableName($entity), $storageService->getEntityManager()->getConnection());
+        $query = new Query(
+            $this->getEntityAuditTableName($entity),
+            $storageService->getEntityManager()->getConnection(),
+            $this->provider->getConfiguration()
+        );
         $query
             ->addOrderBy(Query::CREATED_AT, 'DESC')
             ->addOrderBy(Query::ID, 'DESC')
@@ -83,6 +85,12 @@ class Reader
             $query->addFilter(new SimpleFilter(Query::DISCRIMINATOR, $entity));
         }
 
+        foreach ($this->provider->getConfiguration()->getExtraIndices() as $indexedField => $extraIndexConfig) {
+            if (null !== $config[$indexedField]) {
+                $query->addFilter($indexedField, $config[$indexedField]);
+            }
+        }
+
         return $query;
     }
 
@@ -104,9 +112,18 @@ class Reader
             ->setAllowedTypes('page', ['null', 'int'])
             ->setAllowedTypes('page_size', ['null', 'int'])
             ->setAllowedTypes('strict', ['null', 'bool'])
-            ->setAllowedValues('page', static fn ($value) => null === $value || $value >= 1)
-            ->setAllowedValues('page_size', static fn ($value) => null === $value || $value >= 1)
+            ->setAllowedValues('page', static function ($value) {
+                return null === $value || $value >= 1;
+            })
+            ->setAllowedValues('page_size', static function ($value) {
+                return null === $value || $value >= 1;
+            })
         ;
+
+        foreach ($this->provider->getConfiguration()->getExtraIndices() as $indexedField => $extraIndexConfig) {
+            $resolver->setDefault($indexedField, null);
+            $resolver->setAllowedTypes($indexedField, ['null', 'int', 'string', 'array']);
+        }
     }
 
     /**

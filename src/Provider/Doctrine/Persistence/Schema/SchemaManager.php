@@ -1,14 +1,11 @@
 <?php
 
-declare(strict_types=1);
-
 namespace DH\Auditor\Provider\Doctrine\Persistence\Schema;
 
 use DH\Auditor\Provider\Doctrine\Configuration;
 use DH\Auditor\Provider\Doctrine\DoctrineProvider;
 use DH\Auditor\Provider\Doctrine\Persistence\Helper\DoctrineHelper;
 use DH\Auditor\Provider\Doctrine\Persistence\Helper\PlatformHelper;
-use DH\Auditor\Provider\Doctrine\Persistence\Helper\SchemaHelper;
 use DH\Auditor\Provider\Doctrine\Service\AuditingService;
 use DH\Auditor\Provider\Doctrine\Service\StorageService;
 use Doctrine\DBAL\Connection;
@@ -17,12 +14,12 @@ use Doctrine\DBAL\Schema\SchemaException;
 use Doctrine\DBAL\Schema\Table;
 use Doctrine\ORM\EntityManagerInterface;
 
-/**
- * @see \DH\Auditor\Tests\Provider\Doctrine\Persistence\Schema\SchemaManagerTest
- */
 class SchemaManager
 {
-    private DoctrineProvider $provider;
+    /**
+     * @var DoctrineProvider
+     */
+    private $provider;
 
     public function __construct(DoctrineProvider $provider)
     {
@@ -190,7 +187,7 @@ class SchemaManager
 
             // Add columns to audit table
             $isJsonSupported = PlatformHelper::isJsonSupported($connection);
-            foreach (SchemaHelper::getAuditTableColumns() as $columnName => $struct) {
+            foreach ($configuration->getAllFields() as $columnName => $struct) {
                 if (DoctrineHelper::getDoctrineType('JSON') === $struct['type'] && $isJsonSupported) {
                     $type = DoctrineHelper::getDoctrineType('TEXT');
                 } else {
@@ -201,7 +198,7 @@ class SchemaManager
             }
 
             // Add indices to audit table
-            foreach (SchemaHelper::getAuditTableIndices($auditTablename) as $columnName => $struct) {
+            foreach ($configuration->getAllIndices($auditTablename) as $columnName => $struct) {
                 if ('primary' === $struct['type']) {
                     $auditTable->setPrimaryKey([$columnName]);
                 } else {
@@ -234,14 +231,16 @@ class SchemaManager
             $schema = $schemaManager->createSchema();
         }
 
+        /** @var Configuration $configuration */
+        $configuration = $this->provider->getConfiguration();
         $table = $schema->getTable($table->getName());
         $columns = $schemaManager->listTableColumns($table->getName());
 
         // process columns
-        $this->processColumns($table, $columns, SchemaHelper::getAuditTableColumns(), $connection);
+        $this->processColumns($table, $columns, $configuration->getAllFields(), $connection);
 
         // process indices
-        $this->processIndices($table, SchemaHelper::getAuditTableIndices($table->getName()), $connection);
+        $this->processIndices($table, $configuration->getAllIndices($table->getName()), $connection);
 
         return $schema;
     }

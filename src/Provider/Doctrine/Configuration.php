@@ -1,40 +1,73 @@
 <?php
 
-declare(strict_types=1);
-
 namespace DH\Auditor\Provider\Doctrine;
 
 use DH\Auditor\Provider\ConfigurationInterface;
+use DH\Auditor\Provider\Doctrine\Persistence\Helper\SchemaHelper;
 use DH\Auditor\Provider\Doctrine\Service\AuditingService;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
-/**
- * @see \DH\Auditor\Tests\Provider\Doctrine\ConfigurationTest
- */
 class Configuration implements ConfigurationInterface
 {
-    private ?DoctrineProvider $provider = null;
+    /**
+     * @var DoctrineProvider
+     */
+    private $provider;
 
-    private string $tablePrefix;
+    /**
+     * @var string
+     */
+    private $tablePrefix;
 
-    private string $tableSuffix;
+    /**
+     * @var string
+     */
+    private $tableSuffix;
 
-    private array $ignoredColumns;
+    /**
+     * @var array
+     */
+    private $extraFields = [];
 
-    private ?array $entities = null;
+    /**
+     * @var array
+     */
+    private $extraIndices = [];
 
-    private array $storageServices = [];
+    /**
+     * @var array
+     */
+    private $ignoredColumns;
 
-    private array $auditingServices = [];
+    /**
+     * @var null|array
+     */
+    private $entities;
 
-    private bool $isViewerEnabled;
+    /**
+     * @var array
+     */
+    private $storageServices = [];
+
+    /**
+     * @var array
+     */
+    private $auditingServices = [];
+
+    /**
+     * @var bool
+     */
+    private $isViewerEnabled;
 
     /**
      * @var callable
      */
     private $storageMapper;
 
-    private array $annotationLoaded = [];
+    /**
+     * @var array
+     */
+    private $annotationLoaded = [];
 
     public function __construct(array $options)
     {
@@ -53,6 +86,20 @@ class Configuration implements ConfigurationInterface
             }
         }
 
+        if (isset($config['extra_fields']) && !empty($config['extra_fields'])) {
+            // use field names as array keys for easier lookup
+            foreach ($config['extra_fields'] as $fieldName => $fieldOptions) {
+                $this->extraFields[$fieldName] = $fieldOptions;
+            }
+        }
+
+        if (isset($config['extra_indices']) && !empty($config['extra_indices'])) {
+            // use index names as array keys for easier lookup
+            foreach ($config['extra_indices'] as $indexName => $indexOptions) {
+                $this->extraIndices[$indexName] = $indexOptions;
+            }
+        }
+
         $this->storageServices = $config['storage_services'];
         $this->auditingServices = $config['auditing_services'];
         $this->isViewerEnabled = $config['viewer'];
@@ -68,6 +115,8 @@ class Configuration implements ConfigurationInterface
                 'table_suffix' => '_audit',
                 'ignored_columns' => [],
                 'entities' => [],
+                'extra_fields' => [],
+                'extra_indices' => [],
                 'storage_services' => [],
                 'auditing_services' => [],
                 'viewer' => true,
@@ -77,6 +126,8 @@ class Configuration implements ConfigurationInterface
             ->setAllowedTypes('table_suffix', 'string')
             ->setAllowedTypes('ignored_columns', 'array')
             ->setAllowedTypes('entities', 'array')
+            ->setAllowedTypes('extra_fields', 'array')
+            ->setAllowedTypes('extra_indices', 'array')
             ->setAllowedTypes('storage_services', 'array')
             ->setAllowedTypes('auditing_services', 'array')
             ->setAllowedTypes('viewer', 'bool')
@@ -157,6 +208,69 @@ class Configuration implements ConfigurationInterface
         return $this->ignoredColumns;
     }
 
+    public function getExtraFields(): array
+    {
+        return $this->extraFields;
+    }
+
+    public function getAllFields(): array
+    {
+        return array_merge(
+            SchemaHelper::getAuditTableColumns(),
+            $this->extraFields
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $extraFields
+     *
+     * @return $this
+     */
+    public function setExtraFields(array $extraFields): self
+    {
+        $this->extraFields = $extraFields;
+
+        return $this;
+    }
+
+    public function getExtraIndices(): array
+    {
+        return $this->extraIndices;
+    }
+
+    public function prepareExtraIndices(string $tablename): array
+    {
+        $indices = [];
+        foreach ($this->extraIndices as $extraIndexField => $extraIndexOptions) {
+            $indices[$extraIndexField] = [
+                'type' => $extraIndexOptions['type'] ?? 'index',
+                'name' => sprintf('%s_%s_idx', $extraIndexOptions['name_prefix'] ?? $extraIndexField, md5($tablename)),
+            ];
+        }
+
+        return $indices;
+    }
+
+    public function getAllIndices(string $tablename): array
+    {
+        return array_merge(
+            SchemaHelper::getAuditTableIndices($tablename),
+            $this->prepareExtraIndices($tablename)
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $extraIndices
+     *
+     * @return $this
+     */
+    public function setExtraIndices(array $extraIndices): self
+    {
+        $this->extraIndices = $extraIndices;
+
+        return $this;
+    }
+
     /**
      * Get the value of entities.
      */
@@ -168,13 +282,13 @@ class Configuration implements ConfigurationInterface
             foreach ($auditingServices as $auditingService) {
                 // do not load annotations if they're already loaded
                 if (!isset($this->annotationLoaded[$auditingService->getName()]) || !$this->annotationLoaded[$auditingService->getName()]) {
-                    $this->provider->loadAnnotations($auditingService->getEntityManager(), $this->entities ?? []);
+                    $this->provider->loadAnnotations($auditingService->getEntityManager(), null === $this->entities ? [] : $this->entities);
                     $this->annotationLoaded[$auditingService->getName()] = true;
                 }
             }
         }
 
-        return $this->entities ?? [];
+        return null === $this->entities ? [] : $this->entities;
     }
 
     /**
@@ -216,15 +330,12 @@ class Configuration implements ConfigurationInterface
         return $this;
     }
 
-    /**
-     * @return null|callable|string
-     */
-    public function getStorageMapper()
+    public function getStorageMapper(): ?callable
     {
         return $this->storageMapper;
     }
 
-    public function getProvider(): ?DoctrineProvider
+    public function getProvider(): DoctrineProvider
     {
         return $this->provider;
     }
