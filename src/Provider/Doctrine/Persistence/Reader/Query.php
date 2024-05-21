@@ -6,7 +6,7 @@ namespace DH\Auditor\Provider\Doctrine\Persistence\Reader;
 
 use DH\Auditor\Exception\InvalidArgumentException;
 use DH\Auditor\Model\Entry;
-use DH\Auditor\Provider\Doctrine\Persistence\Helper\SchemaHelper;
+use DH\Auditor\Provider\ConfigurationInterface;
 use DH\Auditor\Provider\Doctrine\Persistence\Reader\Filter\DateRangeFilter;
 use DH\Auditor\Provider\Doctrine\Persistence\Reader\Filter\FilterInterface;
 use DH\Auditor\Provider\Doctrine\Persistence\Reader\Filter\RangeFilter;
@@ -42,7 +42,7 @@ class Query
 
     private int $limit = 0;
 
-    public function __construct(string $table, Connection $connection)
+    public function __construct(string $table, Connection $connection, private ConfigurationInterface $configuration)
     {
         $this->connection = $connection;
         $this->table = $table;
@@ -150,7 +150,7 @@ class Query
 
     public function getSupportedFilters(): array
     {
-        return array_keys(SchemaHelper::getAuditTableIndices('fake'));
+        return array_keys($this->configuration->getAllIndices('fake'));
     }
 
     public function getFilters(): array

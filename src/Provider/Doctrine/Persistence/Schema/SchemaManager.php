@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace DH\Auditor\Provider\Doctrine\Persistence\Schema;
 
+use DH\Auditor\Provider\ConfigurationInterface;
 use DH\Auditor\Provider\Doctrine\Configuration;
 use DH\Auditor\Provider\Doctrine\DoctrineProvider;
 use DH\Auditor\Provider\Doctrine\Persistence\Helper\DoctrineHelper;
@@ -169,7 +170,7 @@ class SchemaManager
 
             // Add columns to audit table
             $isJsonSupported = PlatformHelper::isJsonSupported($connection);
-            foreach (SchemaHelper::getAuditTableColumns() as $columnName => $struct) {
+            foreach ($configuration->getAllFields() as $columnName => $struct) {
                 if (Types::JSON === $struct['type'] && !$isJsonSupported) {
                     $type = Types::TEXT;
                 } else {
@@ -180,7 +181,7 @@ class SchemaManager
             }
 
             // Add indices to audit table
-            foreach (SchemaHelper::getAuditTableIndices($auditTablename) as $columnName => $struct) {
+            foreach ($configuration->getAllIndices($auditTablename) as $columnName => $struct) {
                 if ('primary' === $struct['type']) {
                     $auditTable->setPrimaryKey([$columnName]);
                 } else {
@@ -188,7 +189,7 @@ class SchemaManager
                         [$columnName],
                         $struct['name'],
                         [],
-                        PlatformHelper::isIndexLengthLimited($columnName, $connection) ? ['lengths' => [191]] : []
+                        PlatformHelper::isIndexLengthLimited($columnName, $connection, $configuration) ? ['lengths' => [191]] : []
                     );
                 }
             }
@@ -222,10 +223,10 @@ class SchemaManager
         $table = $schema->getTable($auditTablename);
 
         // process columns
-        $this->processColumns($table, $table->getColumns(), SchemaHelper::getAuditTableColumns(), $connection);
+        $this->processColumns($table, $table->getColumns(), $configuration->getAllFields(), $connection);
 
         // process indices
-        $this->processIndices($table, SchemaHelper::getAuditTableIndices($auditTablename), $connection);
+        $this->processIndices($table, $configuration->getAllIndices($auditTablename), $connection, $configuration);
 
         return $schema;
     }
@@ -309,8 +310,12 @@ class SchemaManager
     /**
      * @throws SchemaException
      */
-    private function processIndices(Table $table, array $expectedIndices, Connection $connection): void
-    {
+    private function processIndices(
+        Table $table,
+        array $expectedIndices,
+        Connection $connection,
+        ConfigurationInterface $configuration
+    ): void {
         foreach ($expectedIndices as $columnName => $options) {
             if ('primary' === $options['type']) {
                 $table->dropPrimaryKey();
@@ -323,7 +328,7 @@ class SchemaManager
                     [$columnName],
                     $options['name'],
                     [],
-                    PlatformHelper::isIndexLengthLimited($columnName, $connection) ? ['lengths' => [191]] : []
+                    PlatformHelper::isIndexLengthLimited($columnName, $connection, $configuration) ? ['lengths' => [191]] : []
                 );
             }
         }

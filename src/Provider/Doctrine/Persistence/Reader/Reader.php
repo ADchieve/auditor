@@ -51,7 +51,12 @@ class Reader
         /** @var StorageService $storageService */
         $storageService = $this->provider->getStorageServiceForEntity($entity);
 
-        $query = new Query($this->getEntityAuditTableName($entity), $storageService->getEntityManager()->getConnection());
+        $query = new Query(
+            $this->getEntityAuditTableName($entity),
+            $storageService->getEntityManager()->getConnection(),
+            $this->provider->getConfiguration()
+        );
+
         $query
             ->addOrderBy(Query::CREATED_AT, 'DESC')
             ->addOrderBy(Query::ID, 'DESC')

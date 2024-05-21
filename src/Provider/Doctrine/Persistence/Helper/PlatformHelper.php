@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace DH\Auditor\Provider\Doctrine\Persistence\Helper;
 
+use DH\Auditor\Provider\ConfigurationInterface;
+use DH\Auditor\Provider\Doctrine\Configuration;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Driver\ServerInfoAwareConnection;
 
@@ -14,9 +16,12 @@ abstract class PlatformHelper
      *
      * @see https://github.com/doctrine/dbal/issues/3419
      */
-    public static function isIndexLengthLimited(string $name, Connection $connection): bool
-    {
-        $columns = SchemaHelper::getAuditTableColumns();
+    public static function isIndexLengthLimited(
+        string $name,
+        Connection $connection,
+        Configuration $configuration
+    ): bool {
+        $columns = $configuration->getAllFields();
         if (
             !isset($columns[$name])
             || $columns[$name]['type'] !== DoctrineHelper::getDoctrineType('STRING')

@@ -6,6 +6,7 @@ namespace DH\Auditor\Provider\Doctrine;
 
 use DH\Auditor\Provider\ConfigurationInterface;
 use DH\Auditor\Provider\Doctrine\Persistence\Helper\DoctrineHelper;
+use DH\Auditor\Provider\Doctrine\Persistence\Helper\SchemaHelper;
 use DH\Auditor\Provider\Doctrine\Persistence\Schema\SchemaManager;
 use DH\Auditor\Provider\Doctrine\Service\AuditingService;
 use DH\Auditor\Tests\Provider\Doctrine\ConfigurationTest;
@@ -22,9 +23,9 @@ class Configuration implements ConfigurationInterface
 
     private string $tableSuffix;
 
-    private array $extraFields;
+    private array $extraFields = [];
 
-    private array $extraIndices;
+    private array $extraIndices = [];
 
     private array $ignoredColumns;
 
@@ -190,6 +191,14 @@ class Configuration implements ConfigurationInterface
         return $this->extraFields;
     }
 
+    public function getAllFields(): array
+    {
+        return array_merge(
+            SchemaHelper::getAuditTableColumns(),
+            $this->extraFields
+        );
+    }
+
     /**
      * @param array<string, mixed> $extraFields
      *
@@ -205,6 +214,14 @@ class Configuration implements ConfigurationInterface
     public function getExtraIndices(): array
     {
         return $this->extraIndices;
+    }
+
+    public function getAllIndices(string $tablename): array
+    {
+        return array_merge(
+            SchemaHelper::getAuditTableIndices($tablename),
+            $this->prepareExtraIndices($tablename)
+        );
     }
 
     public function prepareExtraIndices(string $tablename): array
