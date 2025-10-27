@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace DH\Auditor\Provider\Doctrine\Persistence\Reader;
 
 use ArrayIterator;
@@ -11,17 +13,18 @@ use DH\Auditor\Provider\Doctrine\DoctrineProvider;
 use DH\Auditor\Provider\Doctrine\Persistence\Reader\Filter\SimpleFilter;
 use DH\Auditor\Provider\Doctrine\Service\AuditingService;
 use DH\Auditor\Provider\Doctrine\Service\StorageService;
+use DH\Auditor\Tests\Provider\Doctrine\Persistence\Reader\ReaderTest;
 use Doctrine\ORM\Mapping\ClassMetadata as ORMMetadata;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
+/**
+ * @see ReaderTest
+ */
 class Reader
 {
     public const PAGE_SIZE = 50;
 
-    /**
-     * @var DoctrineProvider
-     */
-    private $provider;
+    private DoctrineProvider $provider;
 
     /**
      * Reader constructor.
@@ -53,6 +56,7 @@ class Reader
             $storageService->getEntityManager()->getConnection(),
             $this->provider->getConfiguration()
         );
+
         $query
             ->addOrderBy(Query::CREATED_AT, 'DESC')
             ->addOrderBy(Query::ID, 'DESC')
@@ -87,7 +91,7 @@ class Reader
 
         foreach ($this->provider->getConfiguration()->getExtraIndices() as $indexedField => $extraIndexConfig) {
             if (null !== $config[$indexedField]) {
-                $query->addFilter($indexedField, $config[$indexedField]);
+                $query->addFilter(new SimpleFilter($indexedField, $config[$indexedField]));
             }
         }
 
@@ -112,12 +116,8 @@ class Reader
             ->setAllowedTypes('page', ['null', 'int'])
             ->setAllowedTypes('page_size', ['null', 'int'])
             ->setAllowedTypes('strict', ['null', 'bool'])
-            ->setAllowedValues('page', static function ($value) {
-                return null === $value || $value >= 1;
-            })
-            ->setAllowedValues('page_size', static function ($value) {
-                return null === $value || $value >= 1;
-            })
+            ->setAllowedValues('page', static fn ($value) => null === $value || $value >= 1)
+            ->setAllowedValues('page_size', static fn ($value) => null === $value || $value >= 1)
         ;
 
         foreach ($this->provider->getConfiguration()->getExtraIndices() as $indexedField => $extraIndexConfig) {
@@ -137,7 +137,7 @@ class Reader
         $results = [];
 
         $entities = $configuration->getEntities();
-        foreach ($entities as $entity => $tablename) {
+        foreach ($entities as $entity => $entityOptions) {
             try {
                 $audits = $this->createQuery($entity, ['transaction_hash' => $transactionHash])->execute();
                 if (\count($audits) > 0) {

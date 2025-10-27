@@ -3,71 +3,46 @@
 namespace DH\Auditor\Provider\Doctrine;
 
 use DH\Auditor\Provider\ConfigurationInterface;
+use DH\Auditor\Provider\Doctrine\Persistence\Helper\DoctrineHelper;
 use DH\Auditor\Provider\Doctrine\Persistence\Helper\SchemaHelper;
+use DH\Auditor\Provider\Doctrine\Persistence\Schema\SchemaManager;
 use DH\Auditor\Provider\Doctrine\Service\AuditingService;
+use DH\Auditor\Tests\Provider\Doctrine\ConfigurationTest;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
+/**
+ * @see ConfigurationTest
+ */
 class Configuration implements ConfigurationInterface
 {
-    /**
-     * @var DoctrineProvider
-     */
-    private $provider;
+    private ?DoctrineProvider $provider = null;
 
-    /**
-     * @var string
-     */
-    private $tablePrefix;
+    private string $tablePrefix;
 
-    /**
-     * @var string
-     */
-    private $tableSuffix;
+    private string $tableSuffix;
 
-    /**
-     * @var array
-     */
-    private $extraFields = [];
+    private array $extraFields = [];
 
-    /**
-     * @var array
-     */
-    private $extraIndices = [];
+    private array $extraIndices = [];
 
-    /**
-     * @var array
-     */
-    private $ignoredColumns;
+    private array $ignoredColumns;
 
-    /**
-     * @var null|array
-     */
-    private $entities;
+    private ?array $entities = null;
 
-    /**
-     * @var array
-     */
-    private $storageServices = [];
+    private array $storageServices = [];
 
-    /**
-     * @var array
-     */
-    private $auditingServices = [];
+    private array $auditingServices = [];
 
-    /**
-     * @var bool
-     */
-    private $isViewerEnabled;
+    private bool $isViewerEnabled;
+
+    private bool $initialized = false;
 
     /**
      * @var callable
      */
     private $storageMapper;
 
-    /**
-     * @var array
-     */
-    private $annotationLoaded = [];
+    private array $annotationLoaded = [];
 
     public function __construct(array $options)
     {
@@ -146,6 +121,7 @@ class Configuration implements ConfigurationInterface
     public function setEntities(array $entities): self
     {
         $this->entities = $entities;
+        $this->initialized = false;
 
         return $this;
     }
@@ -238,6 +214,14 @@ class Configuration implements ConfigurationInterface
         return $this->extraIndices;
     }
 
+    public function getAllIndices(string $tablename): array
+    {
+        return array_merge(
+            SchemaHelper::getAuditTableIndices($tablename),
+            $this->prepareExtraIndices($tablename)
+        );
+    }
+
     public function prepareExtraIndices(string $tablename): array
     {
         $indices = [];
@@ -249,14 +233,6 @@ class Configuration implements ConfigurationInterface
         }
 
         return $indices;
-    }
-
-    public function getAllIndices(string $tablename): array
-    {
-        return array_merge(
-            SchemaHelper::getAuditTableIndices($tablename),
-            $this->prepareExtraIndices($tablename)
-        );
     }
 
     /**
@@ -276,19 +252,48 @@ class Configuration implements ConfigurationInterface
      */
     public function getEntities(): array
     {
+        if ($this->initialized && null !== $this->entities) {
+            return $this->entities;
+        }
         if (null !== $this->provider) {
+            $schemaManager = new SchemaManager($this->provider);
+
             /** @var AuditingService[] $auditingServices */
             $auditingServices = $this->provider->getAuditingServices();
             foreach ($auditingServices as $auditingService) {
+                $entityManager = $auditingService->getEntityManager();
+                $platform = $entityManager->getConnection()->getDatabasePlatform();
+
                 // do not load annotations if they're already loaded
                 if (!isset($this->annotationLoaded[$auditingService->getName()]) || !$this->annotationLoaded[$auditingService->getName()]) {
-                    $this->provider->loadAnnotations($auditingService->getEntityManager(), null === $this->entities ? [] : $this->entities);
+                    $this->provider->loadAnnotations($entityManager, $this->entities ?? []);
                     $this->annotationLoaded[$auditingService->getName()] = true;
                 }
+
+                \assert(null !== $this->entities);
+                foreach ($this->entities as $entity => $config) {
+                    $meta = $entityManager->getClassMetadata(DoctrineHelper::getRealClassName($entity));
+                    $entityTableName = $meta->getTableName();
+                    $namespaceName = $meta->getSchemaName() ?? '';
+
+                    $computedTableName = $schemaManager->resolveTableName($entityTableName, $namespaceName, $platform);
+                    $this->entities[$entity]['table_schema'] = $namespaceName;
+                    $this->entities[$entity]['table_name'] = $entityTableName;
+                    //                    $this->entities[$entity]['computed_table_name'] = $entityTableName;
+                    $this->entities[$entity]['computed_table_name'] = $computedTableName;
+                    $this->entities[$entity]['audit_table_schema'] = $namespaceName;
+                    $this->entities[$entity]['audit_table_name'] = $schemaManager->computeAuditTablename($entityTableName, $this);
+                    //                    $this->entities[$entity]['computed_audit_table_name'] = $schemaManager->computeAuditTablename($this->entities[$entity], $this, $platform);
+                    $this->entities[$entity]['computed_audit_table_name'] = $schemaManager->computeAuditTablename(
+                        $computedTableName,
+                        $this
+                    );
+                }
             }
+            $this->initialized = true;
         }
 
-        return null === $this->entities ? [] : $this->entities;
+        return $this->entities ?? [];
     }
 
     /**
@@ -330,12 +335,15 @@ class Configuration implements ConfigurationInterface
         return $this;
     }
 
-    public function getStorageMapper(): ?callable
+    /**
+     * @return null|callable|string
+     */
+    public function getStorageMapper()
     {
         return $this->storageMapper;
     }
 
-    public function getProvider(): DoctrineProvider
+    public function getProvider(): ?DoctrineProvider
     {
         return $this->provider;
     }
@@ -343,5 +351,6 @@ class Configuration implements ConfigurationInterface
     public function setProvider(DoctrineProvider $provider): void
     {
         $this->provider = $provider;
+        $this->initialized = false;
     }
 }

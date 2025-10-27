@@ -1,28 +1,29 @@
 <?php
 
+declare(strict_types=1);
+
 namespace DH\Auditor\Tests\Provider\Doctrine\Traits;
 
-use DH\Auditor\Provider\Doctrine\Configuration;
+use DH\Auditor\Provider\Doctrine\Auditing\Logger\Middleware\DHMiddleware;
+use DH\Auditor\Provider\Doctrine\Persistence\Helper\DoctrineHelper;
+use Doctrine\DBAL\Configuration;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\DriverManager;
+use Doctrine\DBAL\Schema\AbstractSchemaManager;
+use Throwable;
 
 trait ConnectionTrait
 {
     /**
      * @var Connection[]
      */
-    private static $connections = [];
+    private static array $connections = [];
 
     private function getConnection(string $name = 'default', ?array $params = null): Connection
     {
         if (!isset(self::$connections[$name]) || null === self::$connections[$name]) {
             self::$connections[$name] = $this->createConnection($params);
         }
-
-        //        if (false === self::$connections[$name]->ping()) {
-        //            self::$connections[$name]->close();
-        //            self::$connections[$name]->connect();
-        //        }
 
         return self::$connections[$name];
     }
@@ -31,62 +32,49 @@ trait ConnectionTrait
     {
         $params = self::getConnectionParameters($params);
 
+        $config = new Configuration();
+        $config->setMiddlewares([
+            new DHMiddleware(),
+        ]);
         if ('pdo_sqlite' === $params['driver']) {
             // SQLite
-            $connection = DriverManager::getConnection($params);
-            $schema = $connection->getSchemaManager()->createSchema();
+            $connection = DriverManager::getConnection($params, $config);
+            $schemaManager = DoctrineHelper::createSchemaManager($connection);
+            $schema = DoctrineHelper::introspectSchema($schemaManager);
             $stmts = $schema->toDropSql($connection->getDatabasePlatform());
             foreach ($stmts as $stmt) {
                 $connection->executeStatement($stmt);
             }
-        } elseif ('pdo_pgsql' === $params['driver']) {
-            // PostgreSQL
-            $tmpParams = $params;
-            $dbname = $params['dbname'];
-            unset($tmpParams['dbname']);
-
-            $connection = DriverManager::getConnection($tmpParams);
-
-            // Closes active connections
-            $connection->executeStatement(
-                'SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '.$connection->getDatabasePlatform()->quoteStringLiteral($dbname)
-            );
-
-            $connection->getSchemaManager()->dropAndCreateDatabase($dbname);
         } else {
-            // Other
             $tmpParams = $params;
             $dbname = $params['dbname'];
             unset($tmpParams['dbname']);
 
-            $connection = DriverManager::getConnection($tmpParams);
+            $connection = DriverManager::getConnection($tmpParams, $config);
 
-            if ($connection->getDatabasePlatform()->supportsCreateDropDatabase()) {
-                $connection->getSchemaManager()->dropAndCreateDatabase($dbname);
-            } else {
-                $schema = $connection->getSchemaManager()->createSchema();
-                $stmts = $schema->toDropSql($connection->getDatabasePlatform());
-                foreach ($stmts as $stmt) {
-                    $connection->executeStatement($stmt);
-                }
+            if ('pdo_pgsql' === $params['driver']) {
+                // Closes active connections
+                $connection->executeStatement(
+                    'SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '.$connection->getDatabasePlatform()->quoteStringLiteral($dbname)
+                );
             }
+
+            $this->dropAndCreateDatabase($connection->createSchemaManager(), $dbname);
         }
 
-        $connection->close();
-
-        return DriverManager::getConnection($params);
+        return DriverManager::getConnection($params, $config);
     }
 
     private static function getConnectionParameters(?array $params = null): array
     {
         if (null === $params && !isset(
-                $GLOBALS['db_type'],
-                $GLOBALS['db_username'],
-                $GLOBALS['db_password'],
-                $GLOBALS['db_host'],
-                $GLOBALS['db_name'],
-                $GLOBALS['db_port']
-            )) {
+            $GLOBALS['db_type'],
+            $GLOBALS['db_username'],
+            $GLOBALS['db_password'],
+            $GLOBALS['db_host'],
+            $GLOBALS['db_name'],
+            $GLOBALS['db_port']
+        )) {
             // in memory SQLite DB
             return [
                 'driver' => 'pdo_sqlite',
@@ -109,5 +97,15 @@ trait ConnectionTrait
             'port' => $GLOBALS['db_port'],
             'charset' => $GLOBALS['db_charset'],
         ];
+    }
+
+    private function dropAndCreateDatabase(AbstractSchemaManager $schemaManager, string $dbname): void
+    {
+        try {
+            $schemaManager->dropDatabase($dbname);
+        } catch (Throwable $exception) {
+            // do nothing
+        }
+        $schemaManager->createDatabase($dbname);
     }
 }

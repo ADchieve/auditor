@@ -7,20 +7,24 @@ namespace DH\Auditor\Provider\Doctrine\Auditing\Transaction;
 use DH\Auditor\Exception\MappingException;
 use DH\Auditor\Provider\Doctrine\Persistence\Helper\DoctrineHelper;
 use DH\Auditor\User\UserInterface;
+use Doctrine\DBAL\Exception;
+use Doctrine\DBAL\Types\ConversionException;
 use Doctrine\DBAL\Types\Type;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Mapping\MappingException as ORMMappingException;
+use Throwable;
+use UnitEnum;
 
 trait AuditTrait
 {
     /**
      * Returns the primary key value of an entity.
      *
-     * @throws \DH\Auditor\Exception\MappingException
-     * @throws \Doctrine\DBAL\Exception
-     * @throws \Doctrine\ORM\Mapping\MappingException
-     *
      * @return mixed
+     *
+     * @throws MappingException
+     * @throws Exception
+     * @throws ORMMappingException
      */
     private function id(EntityManagerInterface $entityManager, object $entity)
     {
@@ -49,7 +53,6 @@ trait AuditTrait
 
         $mapping = $meta->getAssociationMapping($pk);
 
-        \assert(\is_string($mapping['targetEntity']));
         $meta = $entityManager->getClassMetadata($mapping['targetEntity']);
         $pk = $meta->getSingleIdentifierFieldName();
         $type = Type::getType($meta->fieldMappings[$pk]['type']);
@@ -64,15 +67,19 @@ trait AuditTrait
      *
      * @param mixed $value
      *
-     * @throws \Doctrine\DBAL\Exception
-     * @throws \Doctrine\DBAL\Types\ConversionException
-     *
      * @return mixed
+     *
+     * @throws Exception
+     * @throws ConversionException
      */
     private function value(EntityManagerInterface $entityManager, Type $type, $value)
     {
         if (null === $value) {
             return null;
+        }
+
+        if (interface_exists(UnitEnum::class) && $value instanceof UnitEnum && property_exists($value, 'value')) { /** @phpstan-ignore-line */
+            $value = $value->value;
         }
 
         $platform = $entityManager->getConnection()->getDatabasePlatform();
@@ -105,6 +112,7 @@ trait AuditTrait
 
                 break;
 
+            case DoctrineHelper::getDoctrineType('BLOB'):
             case DoctrineHelper::getDoctrineType('BINARY'):
                 if (\is_resource($value)) {
                     // let's replace resources with a "simple" representation: resourceType#resourceId
@@ -114,6 +122,9 @@ trait AuditTrait
                 }
 
                 break;
+
+            case DoctrineHelper::getDoctrineType('JSON'):
+                return $value;
 
             default:
                 $convertedValue = $type->convertToDatabaseValue($value, $platform);
@@ -125,10 +136,10 @@ trait AuditTrait
     /**
      * Computes a usable diff.
      *
-     * @throws \DH\Auditor\Exception\MappingException
-     * @throws \Doctrine\DBAL\Exception
-     * @throws \Doctrine\DBAL\Types\ConversionException
-     * @throws \Doctrine\ORM\Mapping\MappingException
+     * @throws MappingException
+     * @throws Exception
+     * @throws ConversionException
+     * @throws ORMMappingException
      */
     private function diff(EntityManagerInterface $entityManager, object $entity, array $changeset): array
     {
@@ -178,9 +189,9 @@ trait AuditTrait
     /**
      * Returns an array describing an entity.
      *
-     * @throws \DH\Auditor\Exception\MappingException
-     * @throws \Doctrine\DBAL\Exception
-     * @throws \Doctrine\ORM\Mapping\MappingException
+     * @throws MappingException
+     * @throws Exception
+     * @throws ORMMappingException
      */
     private function summarize(EntityManagerInterface $entityManager, ?object $entity = null, array $extra = []): ?array
     {
@@ -195,9 +206,17 @@ trait AuditTrait
         $pkName = $meta->getSingleIdentifierFieldName();
 
         if (method_exists($entity, '__toString')) {
-            $label = (string) $entity;
+            try {
+                $label = (string) $entity;
+            } catch (Throwable $throwable) {
+                $label = DoctrineHelper::getRealClassName($entity).(null === $pkValue ? '' : '#'.$pkValue);
+            }
         } else {
             $label = DoctrineHelper::getRealClassName($entity).(null === $pkValue ? '' : '#'.$pkValue);
+        }
+
+        if ('id' !== $pkName) {
+            $extra['pkName'] = $pkName;
         }
 
         return [

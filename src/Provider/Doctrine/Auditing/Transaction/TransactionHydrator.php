@@ -27,11 +27,12 @@ class TransactionHydrator implements TransactionHydratorInterface
      */
     public function hydrate(TransactionInterface $transaction): void
     {
-        $this->hydrateWithScheduledInsertions($transaction, $transaction->getEntityManager());
-        $this->hydrateWithScheduledUpdates($transaction, $transaction->getEntityManager());
-        $this->hydrateWithScheduledDeletions($transaction, $transaction->getEntityManager());
-        $this->hydrateWithScheduledCollectionUpdates($transaction, $transaction->getEntityManager());
-        $this->hydrateWithScheduledCollectionDeletions($transaction, $transaction->getEntityManager());
+        $em = $transaction->getEntityManager();
+        $this->hydrateWithScheduledInsertions($transaction, $em);
+        $this->hydrateWithScheduledUpdates($transaction, $em);
+        $this->hydrateWithScheduledDeletions($transaction, $em);
+        $this->hydrateWithScheduledCollectionUpdates($transaction, $em);
+        $this->hydrateWithScheduledCollectionDeletions($transaction, $em);
     }
 
     private function hydrateWithScheduledInsertions(Transaction $transaction, EntityManagerInterface $entityManager): void
@@ -85,7 +86,7 @@ class TransactionHydrator implements TransactionHydratorInterface
             if (null !== $owner && $this->provider->isAudited($owner)) {
                 $mapping = $collection->getMapping();
 
-                if (null === $mapping) {
+                if (!\is_array($mapping)) {
                     continue;
                 }
 
@@ -102,7 +103,7 @@ class TransactionHydrator implements TransactionHydratorInterface
 
                 /** @var object $entity */
                 foreach ($collection->getDeleteDiff() as $entity) {
-                    if ($this->provider->isAudited($entity) && $collection->getOwner()) {
+                    if ($this->provider->isAudited($entity)) {
                         $transaction->dissociate(
                             $owner,
                             $entity,
@@ -125,7 +126,7 @@ class TransactionHydrator implements TransactionHydratorInterface
             if (null !== $owner && $this->provider->isAudited($owner)) {
                 $mapping = $collection->getMapping();
 
-                if (null === $mapping) {
+                if (!\is_array($mapping)) {
                     continue;
                 }
 

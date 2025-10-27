@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace DH\Auditor\Model;
 
+use DH\Auditor\Tests\Model\EntryTest;
+
 /**
- * @see \DH\Auditor\Tests\Model\EntryTest
+ * @see EntryTest
  */
 class Entry
 {
@@ -106,8 +108,6 @@ class Entry
 
     /**
      * Get the value of ip.
-     *
-     * @return string
      */
     public function getIp(): ?string
     {
@@ -124,8 +124,6 @@ class Entry
 
     /**
      * Get diff values.
-     *
-     * @return array
      */
     public function getDiffs(bool $includeMedadata = false): ?array
     {

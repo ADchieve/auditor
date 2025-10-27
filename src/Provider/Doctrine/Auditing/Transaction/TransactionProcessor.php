@@ -12,12 +12,13 @@ use DH\Auditor\Provider\Doctrine\Configuration;
 use DH\Auditor\Provider\Doctrine\DoctrineProvider;
 use DH\Auditor\Provider\Doctrine\Model\Transaction;
 use DH\Auditor\Provider\Doctrine\Persistence\Helper\DoctrineHelper;
+use DH\Auditor\Tests\Provider\Doctrine\Auditing\Transaction\TransactionProcessorTest;
 use DH\Auditor\Transaction\TransactionProcessorInterface;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Mapping\ClassMetadata;
 
 /**
- * @see \DH\Auditor\Tests\Provider\Doctrine\Auditing\Transaction\TransactionProcessorTest
+ * @see TransactionProcessorTest
  */
 class TransactionProcessor implements TransactionProcessorInterface
 {
@@ -35,11 +36,12 @@ class TransactionProcessor implements TransactionProcessorInterface
      */
     public function process(TransactionInterface $transaction): void
     {
-        $this->processInsertions($transaction, $transaction->getEntityManager());
-        $this->processUpdates($transaction, $transaction->getEntityManager());
-        $this->processAssociations($transaction, $transaction->getEntityManager());
-        $this->processDissociations($transaction, $transaction->getEntityManager());
-        $this->processDeletions($transaction, $transaction->getEntityManager());
+        $em = $transaction->getEntityManager();
+        $this->processInsertions($transaction, $em);
+        $this->processUpdates($transaction, $em);
+        $this->processAssociations($transaction, $em);
+        $this->processDissociations($transaction, $em);
+        $this->processDeletions($transaction, $em);
     }
 
     private function notify(array $payload): void
@@ -210,6 +212,7 @@ class TransactionProcessor implements TransactionProcessorInterface
         $schema = $data['schema'] ? $data['schema'].'.' : '';
         $auditTable = $schema.$configuration->getTablePrefix().$data['table'].$configuration->getTableSuffix();
         $dt = new DateTimeImmutable('now', new DateTimeZone($this->provider->getAuditor()->getConfiguration()->getTimezone()));
+        $diff = \is_string($data['diff']) ? mb_convert_encoding($data['diff'], 'UTF-8', 'UTF-8') : $data['diff'];
 
         $payload = [
             'entity' => $data['entity'],
@@ -218,7 +221,7 @@ class TransactionProcessor implements TransactionProcessorInterface
             'object_id' => (string) $data['id'],
             'discriminator' => $data['discriminator'],
             'transaction_hash' => (string) $data['transaction_hash'],
-            'diffs' => json_encode($data['diff'], JSON_THROW_ON_ERROR),
+            'diffs' => json_encode($diff, JSON_THROW_ON_ERROR),
             'blame_id' => $data['blame']['user_id'],
             'blame_user' => $data['blame']['username'],
             'blame_user_fqdn' => $data['blame']['user_fqdn'],

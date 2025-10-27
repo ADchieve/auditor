@@ -18,9 +18,6 @@ class Logger implements SQLLogger
         $this->flusher = $flusher;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function startQuery($sql, ?array $params = null, ?array $types = null): void
     {
         // insert all audit entries right before commit
@@ -33,10 +30,5 @@ class Logger implements SQLLogger
         }
     }
 
-    /**
-     * {@inheritdoc}
-     */
-    public function stopQuery(): void
-    {
-    }
+    public function stopQuery(): void {}
 }

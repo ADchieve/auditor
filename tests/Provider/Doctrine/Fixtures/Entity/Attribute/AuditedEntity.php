@@ -17,6 +17,12 @@ class AuditedEntity
     #[Audit\Ignore]
     public string $ignoredField;
 
+    #[Audit\Ignore]
+    protected string $ignoredProtectedField;
+
+    #[Audit\Ignore]
+    private string $ignoredPrivateField;
+
     #[ORM\Id, ORM\GeneratedValue(strategy: 'IDENTITY')]
     #[ORM\Column(type: 'integer')]
     private int $id;

@@ -7,6 +7,7 @@ namespace DH\Auditor\Provider\Doctrine\Persistence\Command;
 use DH\Auditor\Auditor;
 use DH\Auditor\Provider\Doctrine\DoctrineProvider;
 use DH\Auditor\Provider\Doctrine\Persistence\Schema\SchemaManager;
+use DH\Auditor\Tests\Provider\Doctrine\Persistence\Command\UpdateSchemaCommandTest;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Command\LockableTrait;
 use Symfony\Component\Console\Helper\ProgressBar;
@@ -16,13 +17,11 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
 /**
- * @see \DH\Auditor\Tests\Provider\Doctrine\Persistence\Command\UpdateSchemaCommandTest
+ * @see UpdateSchemaCommandTest
  */
 class UpdateSchemaCommand extends Command
 {
     use LockableTrait;
-
-    protected static $defaultName = 'audit:schema:update';
 
     private Auditor $auditor;
 
@@ -42,9 +41,9 @@ class UpdateSchemaCommand extends Command
     {
         $this
             ->setDescription('Update audit tables structure')
+            ->setName('audit:schema:update')
             ->addOption('dump-sql', null, InputOption::VALUE_NONE, 'Dumps the generated SQL statements to the screen (does not execute them).')
             ->addOption('force', 'f', InputOption::VALUE_NONE, 'Causes the generated SQL statements to be physically executed against your database.')
-            ->setName(self::$defaultName)
         ;
     }
 

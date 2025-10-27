@@ -8,6 +8,7 @@ use Doctrine\ORM\Mapping as ORM;
 
 /**
  * @ORM\Entity
+ *
  * @ORM\Table(name="locale")
  */
 #[ORM\Entity, ORM\Table(name: 'locale')]
@@ -15,6 +16,7 @@ class Locale
 {
     /**
      * @ORM\Id
+     *
      * @ORM\Column(type="string", length=5)
      */
     #[ORM\Id, ORM\Column(type: 'string', length: 5)]
@@ -41,8 +43,6 @@ class Locale
 
     /**
      * Set the value of id.
-     *
-     * @return Locale
      */
     public function setId(string $id): self
     {
@@ -61,8 +61,6 @@ class Locale
 
     /**
      * Set the value of name.
-     *
-     * @return Locale
      */
     public function setName(string $name): self
     {

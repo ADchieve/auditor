@@ -9,9 +9,10 @@ use DateTimeImmutable;
 use DH\Auditor\Auditor;
 use DH\Auditor\Provider\Doctrine\Configuration;
 use DH\Auditor\Provider\Doctrine\DoctrineProvider;
+use DH\Auditor\Provider\Doctrine\Persistence\Helper\DoctrineHelper;
 use DH\Auditor\Provider\Doctrine\Persistence\Schema\SchemaManager;
-use DH\Auditor\Provider\Doctrine\Service\AuditingService;
 use DH\Auditor\Provider\Doctrine\Service\StorageService;
+use DH\Auditor\Tests\Provider\Doctrine\Persistence\Command\CleanAuditLogsCommandTest;
 use Doctrine\DBAL\Query\QueryBuilder;
 use Exception;
 use Symfony\Component\Console\Command\Command;
@@ -24,15 +25,13 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
 /**
- * @see \DH\Auditor\Tests\Provider\Doctrine\Persistence\Command\CleanAuditLogsCommandTest
+ * @see CleanAuditLogsCommandTest
  */
 class CleanAuditLogsCommand extends Command
 {
     use LockableTrait;
 
     private const UNTIL_DATE_FORMAT = 'Y-m-d H:i:s';
-
-    protected static $defaultName = 'audit:clean';
 
     private Auditor $auditor;
 
@@ -52,7 +51,7 @@ class CleanAuditLogsCommand extends Command
     {
         $this
             ->setDescription('Cleans audit tables')
-            ->setName(self::$defaultName)
+            ->setName('audit:clean')
             ->addOption('no-confirm', null, InputOption::VALUE_NONE, 'No interaction mode')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Do not execute SQL queries.')
             ->addOption('dump-sql', null, InputOption::VALUE_NONE, 'Prints SQL related queries.')
@@ -82,19 +81,20 @@ class CleanAuditLogsCommand extends Command
         $provider = $this->auditor->getProvider(DoctrineProvider::class);
         $schemaManager = new SchemaManager($provider);
 
-//        $entities = $this->provider->getConfiguration()->getEntities();
         /** @var StorageService[] $storageServices */
         $storageServices = $provider->getStorageServices();
 
-        // auditable entities by storage entity manager
-        $repository = [];
+        // auditable classes by storage entity manager
         $count = 0;
 
-        // Collect auditable entities from auditing storage managers
-        [$repository, $count] = $this->collectAuditableEntities($provider, $schemaManager, $repository, $count);
+        // Collect auditable classes from auditing storage managers
+        $repository = $schemaManager->collectAuditableEntities();
+        foreach ($repository as $name => $entities) {
+            $count += \count($entities);
+        }
 
         $message = sprintf(
-            "You are about to clean audits created before <comment>%s</comment>: %d entities involved.\n Do you want to proceed?",
+            "You are about to clean audits created before <comment>%s</comment>: %d classes involved.\n Do you want to proceed?",
             $until->format(self::UNTIL_DATE_FORMAT),
             $count
         );
@@ -115,14 +115,15 @@ class CleanAuditLogsCommand extends Command
             $progressBar->start();
 
             $queries = [];
-            foreach ($repository as $name => $entities) {
-                foreach ($entities as $entity => $tablename) {
-                    $auditTable = $this->computeAuditTablename($tablename, $configuration);
+            foreach ($repository as $name => $classes) {
+                foreach ($classes as $entity => $tablename) {
+                    $connection = $storageServices[$name]->getEntityManager()->getConnection();
+                    $auditTable = $schemaManager->resolveAuditTableName($entity, $configuration, $connection->getDatabasePlatform());
 
                     /**
                      * @var QueryBuilder
                      */
-                    $queryBuilder = $storageServices[$name]->getEntityManager()->getConnection()->createQueryBuilder();
+                    $queryBuilder = $connection->createQueryBuilder();
                     $queryBuilder
                         ->delete($auditTable)
                         ->where('created_at < :until')
@@ -134,7 +135,7 @@ class CleanAuditLogsCommand extends Command
                     }
 
                     if (!$dryRun) {
-                        $queryBuilder->execute();
+                        DoctrineHelper::executeStatement($queryBuilder);
                     }
 
                     $progressBar->setMessage("Cleaning audit tables... (<info>{$auditTable}</info>)");
@@ -179,39 +180,5 @@ class CleanAuditLogsCommand extends Command
         }
 
         return (new DateTimeImmutable())->sub($dateInterval);
-    }
-
-    private function collectAuditableEntities(DoctrineProvider $provider, SchemaManager $schemaManager, array $repository, int $count): array
-    {
-        /** @var AuditingService[] $auditingServices */
-        $auditingServices = $provider->getAuditingServices();
-        foreach ($auditingServices as $name => $auditingService) {
-            $classes = $schemaManager->getAuditableTableNames($auditingService->getEntityManager());
-            // Populate the auditable entities repository
-            foreach ($classes as $entity => $tableName) {
-                $storageService = $provider->getStorageServiceForEntity($entity);
-                $key = array_search($storageService, $provider->getStorageServices(), true);
-                if (!isset($repository[$key])) {
-                    $repository[$key] = [];
-                }
-                $repository[$key][$entity] = $tableName;
-                ++$count;
-            }
-        }
-
-        return [$repository, $count];
-    }
-
-    private function computeAuditTablename(string $tablename, Configuration $configuration): ?string
-    {
-        return preg_replace(
-            sprintf('#^([^\.]+\.)?(%s)$#', preg_quote($tablename, '#')),
-            sprintf(
-                '$1%s$2%s',
-                preg_quote($configuration->getTablePrefix(), '#'),
-                preg_quote($configuration->getTableSuffix(), '#')
-            ),
-            $tablename
-        );
     }
 }

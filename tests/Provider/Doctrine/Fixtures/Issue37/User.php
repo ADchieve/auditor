@@ -8,6 +8,7 @@ use Doctrine\ORM\Mapping as ORM;
 
 /**
  * @ORM\Entity
+ *
  * @ORM\Table(name="users")
  */
 #[ORM\Entity, ORM\Table(name: 'users')]
@@ -15,7 +16,9 @@ class User
 {
     /**
      * @ORM\Id
+     *
      * @ORM\Column(type="integer", options={"unsigned": true})
+     *
      * @ORM\GeneratedValue(strategy="IDENTITY")
      */
     #[ORM\Id, ORM\GeneratedValue(strategy: 'IDENTITY'), ORM\Column(type: 'integer', options: ['unsigned' => true])]
@@ -35,6 +38,7 @@ class User
 
     /**
      * @ORM\ManyToOne(targetEntity="Locale", cascade={"persist", "remove"})
+     *
      * @ORM\JoinColumn(name="locale_id", referencedColumnName="id", nullable=true)
      */
     #[ORM\ManyToOne(targetEntity: 'Locale', cascade: ['persist', 'remove'])]
@@ -53,8 +57,6 @@ class User
 
     /**
      * Set the value of id.
-     *
-     * @return User
      */
     public function setId(int $id): self
     {
@@ -73,8 +75,6 @@ class User
 
     /**
      * Set the value of username.
-     *
-     * @return User
      */
     public function setUsername(string $username): self
     {
@@ -85,8 +85,6 @@ class User
 
     /**
      * Set the value of locale_id.
-     *
-     * @return User
      */
     public function setLocaleId(string $locale_id): self
     {
@@ -97,8 +95,6 @@ class User
 
     /**
      * Get the value of locale_id.
-     *
-     * @return string
      */
     public function getLocaleId(): ?string
     {
@@ -109,8 +105,6 @@ class User
      * Set Locale entity (many to one).
      *
      * @param ?Locale $locale
-     *
-     * @return User
      */
     public function setLocale(?Locale $locale): self
     {

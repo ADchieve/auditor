@@ -12,7 +12,7 @@ use ReflectionException;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
 /**
- * @see \DH\Auditor\Tests\AuditorTest
+ * @see Tests\AuditorTest
  */
 class Auditor
 {
@@ -33,7 +33,7 @@ class Auditor
      */
     private array $auditProviders = [];
 
-    private \Symfony\Component\EventDispatcher\EventDispatcherInterface $dispatcher;
+    private EventDispatcherInterface $dispatcher;
 
     /**
      * @throws ReflectionException
@@ -84,8 +84,6 @@ class Auditor
 
     /**
      * @throws ProviderException
-     *
-     * @return $this
      */
     public function registerProvider(ProviderInterface $provider): self
     {
@@ -109,8 +107,6 @@ class Auditor
 
     /**
      * @throws ProviderException
-     *
-     * @return $this
      */
     public function enableStorage(ProviderInterface $provider): self
     {
@@ -125,8 +121,6 @@ class Auditor
 
     /**
      * @throws ProviderException
-     *
-     * @return $this
      */
     public function disableStorage(ProviderInterface $provider): self
     {
@@ -158,8 +152,6 @@ class Auditor
 
     /**
      * @throws ProviderException
-     *
-     * @return $this
      */
     public function enableAuditing(ProviderInterface $provider): self
     {
@@ -174,8 +166,6 @@ class Auditor
 
     /**
      * @throws ProviderException
-     *
-     * @return $this
      */
     public function disableAuditing(ProviderInterface $provider): self
     {

@@ -2,7 +2,7 @@ name: auditor 1.x CI
 
 on:
   schedule:
-    - cron: 0 1 * * *
+    - cron: 30 0 * * *
   pull_request:
     branches:
       - 1.x
@@ -75,6 +75,7 @@ jobs:
 
       - name: Configure Symfony
         run: |
+          composer global config --no-plugins allow-plugins.symfony/flex true
           composer global require --no-progress --no-scripts --no-plugins symfony/flex
           composer config extra.symfony.require "${{ matrix.symfony }}"
 
@@ -167,6 +168,7 @@ jobs:
 
       - name: Configure Symfony
         run: |
+          composer global config --no-plugins allow-plugins.symfony/flex true
           composer global require --no-progress --no-scripts --no-plugins symfony/flex
           composer config extra.symfony.require "${{ matrix.symfony }}"
 

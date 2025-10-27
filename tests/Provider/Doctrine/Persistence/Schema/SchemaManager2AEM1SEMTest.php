@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace DH\Auditor\Tests\Provider\Doctrine\Persistence\Schema;
 
+use DH\Auditor\Provider\Doctrine\Persistence\Helper\DoctrineHelper;
 use DH\Auditor\Provider\Doctrine\Service\StorageService;
 use DH\Auditor\Tests\Provider\Doctrine\Fixtures\Entity\Inheritance\Joined\Animal;
 use DH\Auditor\Tests\Provider\Doctrine\Fixtures\Entity\Inheritance\Joined\Cat;
@@ -55,13 +56,21 @@ final class SchemaManager2AEM1SEMTest extends TestCase
     public function testSchemaSetup(): void
     {
         $storageServices = $this->provider->getStorageServices();
+        $configuration = $this->provider->getConfiguration();
 
         $expected = [
-            'sem1' => [
-                'author', 'author_audit', 'comment', 'comment_audit', 'post', 'post_audit', 'tag', 'tag_audit', 'post__tag',
-                'animal', 'animal_audit', 'cat', 'cat_audit', 'dog', 'dog_audit', 'vehicle', 'vehicle_audit',
-            ],
+            'sem1' => ['post__tag'],
         ];
+        $entities = $configuration->getEntities();
+        foreach ($entities as $entity => $entityOptions) {
+            if (!\in_array($entityOptions['computed_table_name'], $expected['sem1'], true)) {
+                $expected['sem1'][] = $entityOptions['computed_table_name'];
+            }
+
+            if (!\in_array($entityOptions['computed_audit_table_name'], $expected['sem1'], true)) {
+                $expected['sem1'][] = $entityOptions['computed_audit_table_name'];
+            }
+        }
         sort($expected['sem1']);
 
         /**
@@ -69,7 +78,8 @@ final class SchemaManager2AEM1SEMTest extends TestCase
          * @var StorageService $storageService
          */
         foreach ($storageServices as $name => $storageService) {
-            $schemaManager = $storageService->getEntityManager()->getConnection()->getSchemaManager();
+            $connection = $storageService->getEntityManager()->getConnection();
+            $schemaManager = DoctrineHelper::createSchemaManager($connection);
             $tables = array_map(static fn ($t) => $t->getName(), $schemaManager->listTables());
             sort($tables);
             self::assertSame($expected[$name], $tables, 'Schema of "'.$name.'" is correct.');

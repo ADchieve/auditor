@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace DH\Auditor\Tests\Provider\Doctrine\Traits\Schema;
 
 use DH\Auditor\Provider\Doctrine\DoctrineProvider;
+use DH\Auditor\Provider\Doctrine\Persistence\Helper\DoctrineHelper;
 use DH\Auditor\Provider\Doctrine\Persistence\Schema\SchemaManager;
-use DH\Auditor\Provider\Doctrine\Service\AuditingService;
-use DH\Auditor\Provider\Doctrine\Service\StorageService;
+use DH\Auditor\Provider\Service\StorageServiceInterface;
 use DH\Auditor\Tests\Provider\Doctrine\Traits\DoctrineProviderTrait;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
+use Exception;
 
 trait SchemaSetupTrait
 {
@@ -51,10 +52,11 @@ trait SchemaSetupTrait
         $schemaTool->createSchema($classes);
     }
 
-    protected function tearDownEntitySchema(SchemaTool $schemaTool, EntityManagerInterface $entityManager): void
+    protected function tearDownEntitySchema(EntityManagerInterface $entityManager): void
     {
-        $schemaManager = $entityManager->getConnection()->getSchemaManager();
-        $fromSchema = $schemaManager->createSchema();
+        $storageConnection = $entityManager->getConnection();
+        $schemaManager = DoctrineHelper::createSchemaManager($storageConnection);
+        $fromSchema = DoctrineHelper::introspectSchema($schemaManager);
         $toSchema = clone $fromSchema;
 
         $tables = $fromSchema->getTables();
@@ -62,20 +64,25 @@ trait SchemaSetupTrait
             $toSchema = $toSchema->dropTable($table->getName());
         }
 
-        $sqls = $fromSchema->getMigrateToSql($toSchema, $schemaManager->getDatabasePlatform());
+        $sqls = DoctrineHelper::getMigrateToSql($storageConnection, $fromSchema, $toSchema);
         foreach ($sqls as $sql) {
-            $statement = $entityManager->getConnection()->prepare($sql);
-            $statement->execute();
+            $statement = $storageConnection->prepare($sql);
+            DoctrineHelper::executeStatement($statement);
+        }
+
+        try {
+            foreach ($schemaManager->listSchemaNames() as $schemaName) {
+                if ($storageConnection->getDatabasePlatform()->supportsSchemas() && 'public' !== $schemaName) {
+                    $entityManager->getConnection()->executeStatement('DROP SCHEMA IF EXISTS '.$schemaName);
+                }
+            }
+        } catch (Exception $e) {
         }
     }
 
     private function setupEntitySchemas(): void
     {
-        /**
-         * @var string          $name
-         * @var AuditingService $auditingService
-         */
-        foreach ($this->provider->getAuditingServices() as $name => $auditingService) {
+        foreach ($this->provider->getAuditingServices() as $auditingService) {
             $schemaTool = new SchemaTool($auditingService->getEntityManager());
             $this->setUpEntitySchema($schemaTool, $auditingService->getEntityManager());
         }
@@ -83,37 +90,20 @@ trait SchemaSetupTrait
 
     private function tearDownEntitySchemas(): void
     {
-        /**
-         * @var string          $name
-         * @var AuditingService $auditingService
-         */
-        foreach ($this->provider->getAuditingServices() as $name => $auditingService) {
-            $schemaTool = new SchemaTool($auditingService->getEntityManager());
-            $this->tearDownEntitySchema($schemaTool, $auditingService->getEntityManager());
+        foreach ($this->provider->getAuditingServices() as $auditingService) {
+            $this->tearDownEntitySchema($auditingService->getEntityManager());
         }
     }
 
     private function setupAuditSchemas(): void
     {
-        /**
-         * @var string         $name
-         * @var StorageService $storageService
-         */
-        foreach ($this->provider->getStorageServices() as $name => $storageService) {
-            $schemaTool = new SchemaTool($storageService->getEntityManager());
-            $this->setUpAuditSchema($schemaTool, $storageService->getEntityManager());
-        }
+        $this->setUpAuditSchema();
     }
 
     private function tearDownAuditSchemas(): void
     {
-        /**
-         * @var string         $name
-         * @var StorageService $storageService
-         */
-        foreach ($this->provider->getStorageServices() as $name => $storageService) {
-            $schemaTool = new SchemaTool($storageService->getEntityManager());
-            $this->tearDownAuditSchema($schemaTool, $storageService->getEntityManager());
+        foreach ($this->provider->getStorageServices() as $storageService) {
+            $this->tearDownAuditSchema($storageService->getEntityManager());
         }
     }
 
@@ -122,16 +112,17 @@ trait SchemaSetupTrait
         $this->provider = $this->createDoctrineProvider();
     }
 
-    private function setUpAuditSchema(SchemaTool $schemaTool, EntityManagerInterface $entityManager): void
+    private function setUpAuditSchema(): void
     {
         $updater = new SchemaManager($this->provider);
         $updater->updateAuditSchema();
     }
 
-    private function tearDownAuditSchema(SchemaTool $schemaTool, EntityManagerInterface $entityManager): void
+    private function tearDownAuditSchema(EntityManagerInterface $entityManager): void
     {
-        $schemaManager = $entityManager->getConnection()->getSchemaManager();
-        $schema = $schemaManager->createSchema();
+        $storageConnection = $entityManager->getConnection();
+        $schemaManager = DoctrineHelper::createSchemaManager($storageConnection);
+        $schema = DoctrineHelper::introspectSchema($schemaManager);
         $fromSchema = clone $schema;
 
         $tables = $schemaManager->listTables();
@@ -142,11 +133,19 @@ trait SchemaSetupTrait
             }
         }
 
-        $sqls = $fromSchema->getMigrateToSql($schema, $schemaManager->getDatabasePlatform());
-
+        $sqls = DoctrineHelper::getMigrateToSql($storageConnection, $fromSchema, $schema);
         foreach ($sqls as $sql) {
-            $statement = $entityManager->getConnection()->prepare($sql);
-            $statement->execute();
+            $statement = $storageConnection->prepare($sql);
+            DoctrineHelper::executeStatement($statement);
+        }
+
+        try {
+            foreach ($schemaManager->listSchemaNames() as $schemaName) {
+                if ($storageConnection->getDatabasePlatform()->supportsSchemas() && 'public' !== $schemaName) {
+                    $entityManager->getConnection()->executeStatement('DROP SCHEMA IF EXISTS '.$schemaName);
+                }
+            }
+        } catch (Exception $e) {
         }
     }
 
@@ -155,19 +154,16 @@ trait SchemaSetupTrait
         // No audited entities configured
     }
 
-    private function setupEntities(): void
-    {
-    }
+    private function setupEntities(): void {}
 
+    /**
+     * @param array<StorageServiceInterface> $storageServices
+     */
     private function flushAll(array $storageServices): void
     {
         $done = [];
 
-        /**
-         * @var string         $entity
-         * @var StorageService $storageService
-         */
-        foreach ($storageServices as $entity => $storageService) {
+        foreach ($storageServices as $storageService) {
             $hash = spl_object_hash($storageService);
             if (!\in_array($hash, $done, true)) {
                 $storageService->getEntityManager()->flush();

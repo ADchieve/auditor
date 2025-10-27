@@ -1,21 +1,25 @@
 <?php
 
+declare(strict_types=1);
+
 namespace DH\Auditor\Provider\Doctrine\Persistence\Reader;
 
 use DH\Auditor\Exception\InvalidArgumentException;
 use DH\Auditor\Model\Entry;
 use DH\Auditor\Provider\ConfigurationInterface;
-use DH\Auditor\Provider\Doctrine\Configuration;
-use DH\Auditor\Provider\Doctrine\Persistence\Helper\SchemaHelper;
 use DH\Auditor\Provider\Doctrine\Persistence\Reader\Filter\DateRangeFilter;
 use DH\Auditor\Provider\Doctrine\Persistence\Reader\Filter\FilterInterface;
 use DH\Auditor\Provider\Doctrine\Persistence\Reader\Filter\RangeFilter;
 use DH\Auditor\Provider\Doctrine\Persistence\Reader\Filter\SimpleFilter;
+use DH\Auditor\Tests\Provider\Doctrine\Persistence\Reader\QueryTest;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Query\QueryBuilder;
 use Doctrine\DBAL\Result;
 use Exception;
 
+/**
+ * @see QueryTest
+ */
 class Query
 {
     public const TYPE = 'type';
@@ -26,47 +30,22 @@ class Query
     public const ID = 'id';
     public const DISCRIMINATOR = 'discriminator';
 
-    /**
-     * @var array
-     */
-    private $filters = [];
+    private array $filters = [];
 
-    /**
-     * @var array
-     */
-    private $orderBy = [];
+    private array $orderBy = [];
 
-    /**
-     * @var Connection
-     */
-    private $connection;
+    private Connection $connection;
 
-    /**
-     * @var string
-     */
-    private $table;
+    private string $table;
 
-    /**
-     * @var Configuration
-     */
-    private $configuration;
+    private int $offset = 0;
 
-    /**
-     * @var int
-     */
-    private $offset = 0;
+    private int $limit = 0;
 
-    /**
-     * @var int
-     */
-    private $limit = 0;
-
-    public function __construct(string $table, Connection $connection, ConfigurationInterface $configuration)
+    public function __construct(string $table, Connection $connection, private ConfigurationInterface $configuration)
     {
         $this->connection = $connection;
         $this->table = $table;
-        \assert($configuration instanceof Configuration);
-        $this->configuration = $configuration;
 
         foreach ($this->getSupportedFilters() as $filterType) {
             $this->filters[$filterType] = [];
@@ -102,7 +81,7 @@ class Query
                 ->resetQueryPart('select')
                 ->resetQueryPart('orderBy')
                 ->setMaxResults(null)
-                ->setFirstResult(null)
+                ->setFirstResult(0)
                 ->select('COUNT(id)')
             ;
 
@@ -114,7 +93,7 @@ class Query
                 ;
             } else {
                 // doctrine/dbal v2.13.x
-                $result = $queryBuilder
+                $result = $queryBuilder // @phpstan-ignore-line
                     ->execute()
                     ->fetchColumn(0)
                 ;
@@ -123,7 +102,7 @@ class Query
             $result = false;
         }
 
-        return false === $result ? 0 : $result;
+        return false === $result ? 0 : (int) $result;
     }
 
     public function addFilter(FilterInterface $filter): self
@@ -245,7 +224,7 @@ class Query
     private function buildWhere(QueryBuilder $queryBuilder): QueryBuilder
     {
         foreach ($this->filters as $name => $rawFilters) {
-            if (0 === \count($rawFilters)) {
+            if (0 === (is_countable($rawFilters) ? \count($rawFilters) : 0)) {
                 continue;
             }
 
@@ -258,6 +237,7 @@ class Query
                         $filters = [$this->mergeSimpleFilters($filters)];
 
                         break;
+
                     case RangeFilter::class:
                     case DateRangeFilter::class:
                         break;

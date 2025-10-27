@@ -12,6 +12,4 @@ use Doctrine\Common\Annotations\Annotation;
  * @Target("PROPERTY")
  */
 #[Attribute(Attribute::TARGET_PROPERTY)]
-final class Ignore
-{
-}
+final class Ignore {}

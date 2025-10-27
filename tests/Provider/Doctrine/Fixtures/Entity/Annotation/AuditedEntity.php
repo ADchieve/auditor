@@ -9,6 +9,7 @@ use Doctrine\ORM\Mapping as ORM;
 
 /**
  * @ORM\Entity
+ *
  * @ORM\Table(name="audited_entity")
  *
  * @Audit\Auditable
@@ -23,8 +24,20 @@ class AuditedEntity
     public string $ignoredField;
 
     /**
+     * @Audit\Ignore
+     */
+    protected string $ignoredProtectedField;
+
+    /**
+     * @Audit\Ignore
+     */
+    private string $ignoredPrivateField;
+
+    /**
      * @ORM\Id
+     *
      * @ORM\GeneratedValue(strategy="IDENTITY")
+     *
      * @ORM\Column(type="integer")
      */
     private int $id;

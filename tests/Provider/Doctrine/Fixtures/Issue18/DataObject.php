@@ -8,6 +8,7 @@ use Doctrine\ORM\Mapping as ORM;
 
 /**
  * @ORM\Entity
+ *
  * @ORM\Table(name="data_object")
  */
 #[ORM\Entity, ORM\Table(name: 'data_object')]
@@ -15,7 +16,9 @@ class DataObject
 {
     /**
      * @ORM\Id
+     *
      * @ORM\Column(type="integer", options={"unsigned": true})
+     *
      * @ORM\GeneratedValue(strategy="IDENTITY")
      */
     #[ORM\Id, ORM\GeneratedValue(strategy: 'IDENTITY'), ORM\Column(type: 'integer', options: ['unsigned' => true])]
@@ -39,8 +42,6 @@ class DataObject
 
     /**
      * Set the value of id.
-     *
-     * @return DataObject
      */
     public function setId(int $id): self
     {
@@ -61,8 +62,6 @@ class DataObject
      * Set the value of data.
      *
      * @param mixed $data
-     *
-     * @return DataObject
      */
     public function setData($data): self
     {

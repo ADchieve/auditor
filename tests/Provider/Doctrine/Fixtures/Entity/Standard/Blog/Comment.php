@@ -10,6 +10,7 @@ use Gedmo\Mapping\Annotation as Gedmo;
 
 /**
  * @ORM\Entity
+ *
  * @ORM\Table(name="`comment`", indexes={@ORM\Index(name="fk_post_id", columns={"post_id"})})
  */
 #[ORM\Entity]
@@ -19,7 +20,9 @@ class Comment
 {
     /**
      * @ORM\Id
+     *
      * @ORM\Column(type="integer", options={"unsigned": true})
+     *
      * @ORM\GeneratedValue(strategy="IDENTITY")
      */
     #[ORM\Id]
@@ -43,6 +46,7 @@ class Comment
 
     /**
      * @Gedmo\Timestampable(on="create")
+     *
      * @ORM\Column(type="datetime")
      */
     #[ORM\Column(type: 'datetime')]
@@ -56,15 +60,14 @@ class Comment
 
     /**
      * @ORM\ManyToOne(targetEntity="Post", inversedBy="comments", cascade={"persist", "remove"})
+     *
      * @ORM\JoinColumn(name="post_id", referencedColumnName="id", nullable=true)
      */
     #[ORM\ManyToOne(targetEntity: 'Post', inversedBy: 'comments', cascade: ['persist', 'remove'])]
     #[ORM\JoinColumn(name: 'post_id', referencedColumnName: 'id', nullable: true)]
     protected $post;
 
-    public function __construct()
-    {
-    }
+    public function __construct() {}
 
     public function __sleep()
     {
@@ -83,8 +86,6 @@ class Comment
 
     /**
      * Get the value of id.
-     *
-     * @return int
      */
     public function getId(): ?int
     {
@@ -103,8 +104,6 @@ class Comment
 
     /**
      * Get the value of body.
-     *
-     * @return string
      */
     public function getBody(): ?string
     {
@@ -123,8 +122,6 @@ class Comment
 
     /**
      * Get the value of author.
-     *
-     * @return string
      */
     public function getAuthor(): ?string
     {
@@ -161,8 +158,6 @@ class Comment
 
     /**
      * Get the value of post_id.
-     *
-     * @return int
      */
     public function getPostId(): ?int
     {

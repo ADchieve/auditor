@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace DH\Auditor\Provider\Doctrine\Persistence\Helper;
 
+use DH\Auditor\Provider\ConfigurationInterface;
+use DH\Auditor\Provider\Doctrine\Configuration;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Driver\ServerInfoAwareConnection;
 
@@ -14,9 +16,12 @@ abstract class PlatformHelper
      *
      * @see https://github.com/doctrine/dbal/issues/3419
      */
-    public static function isIndexLengthLimited(string $name, Connection $connection): bool
-    {
-        $columns = SchemaHelper::getAuditTableColumns();
+    public static function isIndexLengthLimited(
+        string $name,
+        Connection $connection,
+        Configuration $configuration
+    ): bool {
+        $columns = $configuration->getAllFields();
         if (
             !isset($columns[$name])
             || $columns[$name]['type'] !== DoctrineHelper::getDoctrineType('STRING')
@@ -39,8 +44,7 @@ abstract class PlatformHelper
             return true;
         }
 
-        return (bool) (!$mariadb && version_compare(self::getOracleMysqlVersionNumber($version), '5.7.7', '<'))
-         ;
+        return (bool) (!$mariadb && version_compare(self::getOracleMysqlVersionNumber($version), '5.7.7', '<'));
     }
 
     public static function getServerVersion(Connection $connection): ?string
@@ -63,12 +67,11 @@ abstract class PlatformHelper
 
         $mariadb = false !== mb_stripos($version, 'mariadb');
 
-        return !($mariadb && version_compare(self::getMariaDbMysqlVersionNumber($version), '10.2.7', '<'))
-            // JSON wasn't supported on MariaDB before 10.2.7
-            // @see https://mariadb.com/kb/en/json-data-type/
+        return !($mariadb && version_compare(self::getMariaDbMysqlVersionNumber($version), '10.2.7', '<'));
+        // JSON wasn't supported on MariaDB before 10.2.7
+        // @see https://mariadb.com/kb/en/json-data-type/
 
         // Assume JSON is supported
-         ;
     }
 
     /**

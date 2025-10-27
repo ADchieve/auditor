@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace DH\Auditor\Tests\Provider\Doctrine\Persistence\Schema;
 
+use DH\Auditor\Provider\Doctrine\Persistence\Helper\DoctrineHelper;
 use DH\Auditor\Provider\Doctrine\Service\StorageService;
 use DH\Auditor\Tests\Provider\Doctrine\Fixtures\Entity\Inheritance\Joined\Animal;
 use DH\Auditor\Tests\Provider\Doctrine\Fixtures\Entity\Inheritance\Joined\Cat;
@@ -55,10 +56,20 @@ final class SchemaManager1AEM2SEMTest extends TestCase
     public function testSchemaSetup(): void
     {
         $storageServices = $this->provider->getStorageServices();
+        $configuration = $this->provider->getConfiguration();
+
         $expected = [
-            'db1' => ['author_audit', 'comment_audit', 'post_audit', 'tag_audit'],
-            'db2' => ['animal_audit', 'cat_audit', 'dog_audit', 'vehicle_audit'],
+            'db1' => [],
+            'db2' => [],
         ];
+        $entities = $configuration->getEntities();
+        foreach ($entities as $entity => $entityOptions) {
+            $key = \in_array($entity, [Author::class, Post::class, Comment::class, Tag::class], true) ? 'db1' : 'db2';
+
+            if (!\in_array($entityOptions['computed_audit_table_name'], $expected[$key], true)) {
+                $expected[$key][] = $entityOptions['computed_audit_table_name'];
+            }
+        }
         sort($expected['db1']);
         sort($expected['db2']);
 
@@ -67,7 +78,8 @@ final class SchemaManager1AEM2SEMTest extends TestCase
          * @var StorageService $storageService
          */
         foreach ($storageServices as $name => $storageService) {
-            $schemaManager = $storageService->getEntityManager()->getConnection()->getSchemaManager();
+            $connection = $storageService->getEntityManager()->getConnection();
+            $schemaManager = DoctrineHelper::createSchemaManager($connection);
             $tables = array_map(
                 static fn ($t) => $t->getName(),
                 $schemaManager->listTables()
