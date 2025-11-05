@@ -270,8 +270,12 @@ class Configuration implements ConfigurationInterface
                     $this->annotationLoaded[$auditingService->getName()] = true;
                 }
 
+                $metadataFactory = $entityManager->getMetadataFactory();
                 \assert(null !== $this->entities);
                 foreach ($this->entities as $entity => $config) {
+                    if ($metadataFactory->isTransient($entity)) {
+                        continue;
+                    }
                     $meta = $entityManager->getClassMetadata(DoctrineHelper::getRealClassName($entity));
                     $entityTableName = $meta->getTableName();
                     $namespaceName = $meta->getSchemaName() ?? '';
